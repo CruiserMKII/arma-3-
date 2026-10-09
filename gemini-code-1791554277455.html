@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dynamic Multi-Player Snooker Scoreboard</title>
+    <!-- Tailwind CSS for mobile responsive layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
+        
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #041009;
+            color: #f1f5f9;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .felt-bg {
+            background: radial-gradient(circle at center, #0f3d23 0%, #082113 70%, #030d07 100%);
+        }
+
+        .ball-btn {
+            transition: transform 0.1s ease, box-shadow 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ball-btn:active {
+            transform: scale(0.92);
+        }
+
+        .ball-shine {
+            position: absolute;
+            top: 10%;
+            left: 15%;
+            width: 35%;
+            height: 35%;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.45);
+            filter: blur(1px);
+            pointer-events: none;
+        }
+
+        /* Snooker ball glossy gradients */
+        .ball-red { background: radial-gradient(circle at 35% 35%, #ff5252, #b71c1c); box-shadow: 0 4px 10px rgba(183, 28, 28, 0.5); color: white; }
+        .ball-yellow { background: radial-gradient(circle at 35% 35%, #fff176, #fbc02d); box-shadow: 0 4px 10px rgba(251, 192, 45, 0.5); color: #1a1a1a; }
+        .ball-green { background: radial-gradient(circle at 35% 35%, #66bb6a, #2e7d32); box-shadow: 0 4px 10px rgba(46, 125, 50, 0.5); color: white; }
+        .ball-brown { background: radial-gradient(circle at 35% 35%, #a1887f, #4e342e); box-shadow: 0 4px 10px rgba(78, 52, 46, 0.5); color: white; }
+        .ball-blue { background: radial-gradient(circle at 35% 35%, #42a5f5, #1565c0); box-shadow: 0 4px 10px rgba(21, 101, 192, 0.5); color: white; }
+        .ball-pink { background: radial-gradient(circle at 35% 35%, #f48fb1, #c2185b); box-shadow: 0 4px 10px rgba(194, 24, 91, 0.5); color: white; }
+        .ball-black { background: radial-gradient(circle at 35% 35%, #616161, #111111); box-shadow: 0 4px 10px rgba(0, 0, 0, 0.7); color: white; border: 1px solid #333; }
+
+        @keyframes targetPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 15px rgba(250, 204, 21, 0.8), 0 0 30px rgba(250, 204, 21, 0.4); }
+            50% { transform: scale(1.08); box-shadow: 0 0 25px rgba(250, 204, 21, 1), 0 0 40px rgba(250, 204, 21, 0.7); }
+        }
+
+        .target-ball {
+            animation: targetPulse 1.4s infinite ease-in-out;
+            z-index: 10;
+        }
+
+        .disabled-ball {
+            opacity: 0.25;
+            filter: grayscale(80%);
+            pointer-events: none;
+        }
+
+        .active-player-card {
+            border-color: #22c55e;
+            box-shadow: 0 0 22px rgba(34, 197, 94, 0.35);
+            background: linear-gradient(145deg, rgba(22, 101, 52, 0.65), rgba(6, 78, 59, 0.45));
+        }
+
+        .inactive-player-card {
+            border-color: rgba(255, 255, 255, 0.08);
+            background: rgba(15, 23, 42, 0.45);
+            opacity: 0.75;
+        }
+    </style>
+</head>
+<body class="felt-bg min-h-screen flex flex-col justify-between p-3 sm:p-5 max-w-md md:max-w-xl mx-auto">
+
+    <!-- Top Header Navigation -->
+    <header class="bg-emerald-950/85 backdrop-blur border border-emerald-800/50 rounded-2xl p-3 shadow-lg mb-2">
+        <div class="flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa-solid fa-circle-dot text-emerald-400 text-xl"></i>
+                <h1 class="font-extrabold text-lg text-emerald-100 tracking-wide">Snooker Hub</h1>
+            </div>
+            
+            <div class="flex items-center space-x-1.5">
+                <!-- Free Ball Toggle Button -->
+                <button id="freeball-btn" onclick="toggleFreeBall()" class="bg-indigo-900/80 hover:bg-indigo-800 active:scale-95 text-indigo-200 border border-indigo-700/60 px-2 py-2 rounded-xl font-bold text-xs flex items-center space-x-1 shadow transition">
+                    <i class="fa-solid fa-star text-amber-300"></i>
+                    <span>Free Ball</span>
+                </button>
+
+                <!-- Undo Button -->
+                <button id="undo-btn" onclick="undoLastAction()" class="bg-amber-600/80 hover:bg-amber-600 active:scale-95 text-white p-2.5 rounded-xl font-medium text-sm flex items-center justify-center shadow transition disabled:opacity-30 disabled:pointer-events-none" title="Undo last shot">
+                    <i class="fa-solid fa-rotate-left text-base"></i>
+                </button>
+                
+                <!-- Re-rack / Reset Frame Button -->
+                <button onclick="promptReRack()" class="bg-sky-800/80 hover:bg-sky-700 active:scale-95 text-white px-2 py-2 rounded-xl font-semibold text-xs flex items-center space-x-1 shadow transition" title="Re-rack Frame">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>Re-rack</span>
+                </button>
+
+                <!-- End Frame Button -->
+                <button onclick="promptEndFrame()" class="bg-emerald-700/80 hover:bg-emerald-600 active:scale-95 text-white px-2.5 py-2 rounded-xl font-semibold text-xs flex items-center space-x-1 shadow transition">
+                    <i class="fa-solid fa-trophy text-amber-300"></i>
+                    <span>Frame</span>
+                </button>
+
+                <!-- Reset Match Button -->
+                <button onclick="promptResetGame()" class="bg-rose-800/70 hover:bg-rose-700 active:scale-95 text-white p-2.5 rounded-xl font-medium text-sm flex items-center justify-center shadow transition" title="Reset Game">
+                    <i class="fa-solid fa-power-off"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Phase & Red Balls Status Banner -->
+    <div class="bg-emerald-950/90 border border-emerald-800/60 rounded-xl p-2.5 flex items-center justify-between mb-2 shadow-md">
+        <!-- Phase Mode Status -->
+        <div class="flex items-center space-x-2">
+            <span id="phase-badge" class="px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-rose-900/80 text-rose-200 border border-rose-700/60">
+                Red Phase
+            </span>
+            <span id="target-guidance" class="text-xs font-bold text-amber-300">
+                Pot Red Ball
+            </span>
+        </div>
+
+        <!-- Remaining Reds Manual Adjuster -->
+        <div class="flex items-center space-x-2 bg-emerald-900/60 px-2 py-1 rounded-lg border border-emerald-800">
+            <div class="w-3.5 h-3.5 rounded-full ball-red flex items-center justify-center shadow-sm"></div>
+            <button onclick="adjustReds(-1)" class="w-6 h-6 bg-emerald-950 hover:bg-emerald-800 active:scale-90 rounded text-emerald-200 font-extrabold text-xs flex items-center justify-center border border-emerald-700">-</button>
+            <span id="reds-count-display" class="text-base font-black text-rose-400 min-w-[1.2rem] text-center">15</span>
+            <button onclick="adjustReds(1)" class="w-6 h-6 bg-emerald-950 hover:bg-emerald-800 active:scale-90 rounded text-emerald-200 font-extrabold text-xs flex items-center justify-center border border-emerald-700">+</button>
+        </div>
+    </div>
+
+    <!-- Dynamic Player List Container -->
+    <main class="space-y-2 mb-2">
+        <div class="flex justify-between items-center px-1 mb-1">
+            <span class="text-xs font-bold text-emerald-300/80 uppercase tracking-wider flex items-center gap-1.5">
+                <i class="fa-solid fa-users text-amber-400"></i> Players (<span id="player-count-num">3</span>)
+            </span>
+            <button onclick="addPlayer()" class="bg-emerald-800/80 hover:bg-emerald-700 active:scale-95 text-emerald-100 border border-emerald-600/50 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow">
+                <i class="fa-solid fa-plus text-amber-400"></i>
+                <span>Add Player</span>
+            </button>
+        </div>
+
+        <div id="players-container" class="space-y-2 max-h-[42vh] overflow-y-auto pr-0.5">
+            <!-- Dynamic Player Cards inserted via JS -->
+        </div>
+    </main>
+
+    <!-- Controls Footer Panel -->
+    <footer class="bg-emerald-950/90 backdrop-blur border border-emerald-800/60 rounded-2xl p-3 shadow-2xl space-y-2.5">
+        <!-- Next Turn & Foul Trigger Bar -->
+        <div class="flex items-center justify-between gap-2">
+            <button onclick="nextTurn()" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] text-white font-black py-3 px-4 rounded-xl shadow-lg flex items-center justify-center space-x-2 border border-emerald-400/30 transition text-sm tracking-wide">
+                <span>NEXT PLAYER TURN</span>
+                <i class="fa-solid fa-arrow-right text-base"></i>
+            </button>
+            
+            <button onclick="openFoulModal()" class="bg-rose-900/80 hover:bg-rose-800 text-rose-200 border border-rose-700/50 active:scale-[0.98] font-bold py-3 px-4 rounded-xl shadow-md flex items-center space-x-1.5 transition text-xs whitespace-nowrap">
+                <i class="fa-solid fa-triangle-exclamation text-amber-400 text-sm"></i>
+                <span>FOUL</span>
+            </button>
+        </div>
+
+        <!-- Snooker Balls Selector Grid -->
+        <div class="grid grid-cols-7 gap-1.5 sm:gap-2 pt-1">
+            <button id="ball-red" onclick="handleBallClick(1, 'Red')" class="ball-btn ball-red aspect-square rounded-full flex flex-col items-center justify-center font-extrabold text-base sm:text-lg shadow-md">
+                <div class="ball-shine"></div>
+                <span>1</span>
+            </button>
+            <button id="ball-yellow" onclick="handleBallClick(2, 'Yellow')" class="ball-btn ball-yellow aspect-square rounded-full flex flex-col items-center justify-center font-extrabold text-base sm:text-lg shadow-md">
+                <div class="ball-shine"></div>
+                <span>2</span>
+            </button>
+            <button id="ball-green" onclick="handleBallClick(3, 'Green')" class="ball-btn ball-green aspect-square rounded-full flex flex-col items-center justify-center font-extrabold text-base sm:text-lg shadow-md">
+                <div class="ball-shine"></div>
+                <span>3</span>
+            </button>
+            <button id="ball-brown" onclick="handleBallClick(4, 'Brown')" class="ball-btn ball-brown aspect-square rounded-full flex flex-col items-center justify-center font-extrabold text-base sm:text-lg shadow-md">
+                <div class="ball-shine"></div>
+                <span>4</span>
+            </button>
+            <button id="ball-blue" onclick="handleBallClick(5, 'Blue')" class="ball-btn ball-blue aspect-square rounded-full flex flex-col items-center justify-center font-extrabold text-base sm:text-lg shadow-md">
+                <div class="ball-shine"></div>
+                <span>5</span>
+            </button>
+            <button id="ball-pink" onclick="handleBallClick(6, 'Pink')" class="ball-btn ball-pink aspect-square rounded-full flex flex-col items-center justify-center font-extrabold text-base sm:text-lg shadow-md">
+                <div class="ball-shine"></div>
+                <span>6</span>
+            </button>
+            <button id="ball-black" onclick="handleBallClick(7, 'Black')" class="ball-btn ball-black aspect-square rounded-full flex flex-col items-center justify-center font-extrabold text-base sm:text-lg shadow-md">
+                <div class="ball-shine"></div>
+                <span>7</span>
+            </button>
+        </div>
+    </footer>
+
+    <!-- Modals Section -->
+    <!-- Frame Summary Modal (Auto Finished Frame) -->
+    <div id="frame-finished-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md hidden items-center justify-center z-50 p-4">
+        <div class="bg-slate-900 border border-emerald-500/50 rounded-2xl w-full max-w-xs p-5 shadow-2xl space-y-4 text-center">
+            <div class="w-16 h-16 bg-amber-500/20 border border-amber-400/40 rounded-full flex items-center justify-center mx-auto text-amber-400 text-3xl shadow-lg animate-bounce">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+            
+            <div>
+                <span class="text-xs font-bold text-emerald-400 uppercase tracking-widest">Frame Complete</span>
+                <h2 id="frame-winner-title" class="text-xl font-extrabold text-white mt-1">Player 1 Wins!</h2>
+            </div>
+
+            <div id="frame-scores-breakdown" class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-3 space-y-2 text-left max-h-40 overflow-y-auto">
+                <!-- Populated dynamically via JS -->
+            </div>
+
+            <button onclick="startNewFrameFromModal()" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold py-3 px-4 rounded-xl shadow-lg border border-emerald-400/30 transition text-sm">
+                START NEXT FRAME
+            </button>
+        </div>
+    </div>
+
+    <!-- Foul Modal (Styled with Snooker Ball Colors) -->
+    <div id="foul-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-xs p-5 shadow-2xl space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                <h3 class="text-lg font-bold text-rose-400 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Record Foul
+                </h3>
+                <button onclick="closeFoulModal()" class="text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <p class="text-xs text-slate-300">Select foul points committed by active player:</p>
+            
+            <!-- Foul Options styled as Colored Snooker Balls -->
+            <div class="grid grid-cols-4 gap-2.5 py-1">
+                <button onclick="applyFoul(4)" class="ball-btn ball-brown aspect-square rounded-full flex flex-col items-center justify-center font-extrabold text-xl shadow-lg">
+                    <div class="ball-shine"></div>
+                    <span>4</span>
+                </button>
+                <button onclick="applyFoul(5)" class="ball-btn ball-blue aspect-square rounded-full flex flex-col items-center justify-center font-extrabold text-xl shadow-lg">
+                    <div class="ball-shine"></div>
+                    <span>5</span>
+                </button>
+                <button onclick="applyFoul(6)" class="ball-btn ball-pink aspect-square rounded-full flex flex-col items-center justify-center font-extrabold text-xl shadow-lg">
+                    <div class="ball-shine"></div>
+                    <span>6</span>
+                </button>
+                <button onclick="applyFoul(7)" class="ball-btn ball-black aspect-square rounded-full flex flex-col items-center justify-center font-extrabold text-xl shadow-lg">
+                    <div class="ball-shine"></div>
+                    <span>7</span>
+                </button>
+            </div>
+
+            <div class="pt-2 border-t border-slate-800 space-y-2">
+                <label class="text-xs text-slate-400 block font-medium">Foul Penalty Mode:</label>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <button id="foul-mode-add" onclick="setFoulMode('add')" class="py-2 px-2 rounded-lg border font-semibold text-center transition">Add to Opponents</button>
+                    <button id="foul-mode-deduct" onclick="setFoulMode('deduct')" class="py-2 px-2 rounded-lg border font-semibold text-center transition">Deduct Fouler</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Name Modal -->
+    <div id="name-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-xs p-5 shadow-2xl space-y-4">
+            <h3 class="text-lg font-bold text-emerald-400">Edit Player Name</h3>
+            <input type="text" id="player-name-input" maxlength="15" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-medium focus:outline-none focus:border-emerald-500">
+            <div class="flex justify-end space-x-2 pt-2">
+                <button onclick="closeNameModal()" class="px-4 py-2 rounded-xl text-slate-400 text-sm font-semibold">Cancel</button>
+                <button onclick="savePlayerName()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold shadow">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-xs p-5 shadow-2xl space-y-4 text-center">
+            <div id="confirm-icon" class="text-3xl text-amber-400"></div>
+            <h3 id="confirm-title" class="text-lg font-bold text-white"></h3>
+            <p id="confirm-desc" class="text-xs text-slate-300"></p>
+            <div class="flex justify-center space-x-3 pt-2">
+                <button onclick="closeConfirmModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-sm font-semibold hover:bg-slate-700">Cancel</button>
+                <button id="confirm-action-btn" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 shadow">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Color sequence array definition
+        const COLOR_SEQUENCE = ['Yellow', 'Green', 'Brown', 'Blue', 'Pink', 'Black'];
+        const COLOR_VALUES = { 'Yellow': 2, 'Green': 3, 'Brown': 4, 'Blue': 5, 'Pink': 6, 'Black': 7 };
+
+        // Dynamic State Engine
+        let state = {
+            activePlayer: 0,
+            remainingReds: 15,
+            targetPhase: 'red', // 'red', 'color', or color name ('Yellow', 'Green', etc.)
+            colorSequenceIndex: 0, // 0 = Yellow, 1 = Green, 2 = Brown, 3 = Blue, 4 = Pink, 5 = Black
+            isFreeBall: false,
+            foulMode: 'add', // 'add' to opponents or 'deduct' from fouler
+            players: [
+                { id: 'p1', name: 'Player 1', score: 0, frames: 0, currentBreak: 0, highBreak: 0 },
+                { id: 'p2', name: 'Player 2', score: 0, frames: 0, currentBreak: 0, highBreak: 0 },
+                { id: 'p3', name: 'Player 3', score: 0, frames: 0, currentBreak: 0, highBreak: 0 }
+            ],
+            history: [] // Undo stack
+        };
+
+        let editingPlayerIndex = null;
+        let confirmCallback = null;
+
+        function pushHistory() {
+            state.history.push(JSON.stringify({
+                activePlayer: state.activePlayer,
+                remainingReds: state.remainingReds,
+                targetPhase: state.targetPhase,
+                colorSequenceIndex: state.colorSequenceIndex,
+                isFreeBall: state.isFreeBall,
+                foulMode: state.foulMode,
+                players: state.players
+            }));
+            
+            if (state.history.length > 30) state.history.shift();
+            updateUndoButton();
+        }
+
+        function updateUndoButton() {
+            const undoBtn = document.getElementById('undo-btn');
+            if (undoBtn) {
+                undoBtn.disabled = state.history.length === 0;
+            }
+        }
+
+        function undoLastAction() {
+            if (state.history.length === 0) return;
+            const previousState = JSON.parse(state.history.pop());
+            state.activePlayer = previousState.activePlayer;
+            state.remainingReds = previousState.remainingReds;
+            state.targetPhase = previousState.targetPhase;
+            state.colorSequenceIndex = previousState.colorSequenceIndex;
+            state.isFreeBall = previousState.isFreeBall;
+            state.foulMode = previousState.foulMode;
+            state.players = previousState.players;
+            
+            render();
+            updateUndoButton();
+        }
+
+        // Dynamic Player Addition & Removal
+        function addPlayer() {
+            pushHistory();
+            const newIndex = state.players.length + 1;
+            state.players.push({
+                id: 'p' + Date.now(),
+                name: `Player ${newIndex}`,
+                score: 0,
+                frames: 0,
+                currentBreak: 0,
+                highBreak: 0
+            });
+            render();
+        }
+
+        function removePlayer(index, event) {
+            if (event) event.stopPropagation();
+            if (state.players.length <= 1) return;
+
+            pushHistory();
+            state.players.splice(index, 1);
+            if (state.activePlayer >= state.players.length) {
+                state.activePlayer = 0;
+            }
+            render();
+        }
+
+        function toggleFreeBall() {
+            state.isFreeBall = !state.isFreeBall;
+            render();
+        }
+
+        function handleBallClick(points, ballName) {
+            if (state.players.length === 0) return;
+
+            pushHistory();
+            const player = state.players[state.activePlayer];
+
+            // Free Ball mode
+            if (state.isFreeBall) {
+                player.score += points;
+                player.currentBreak += points;
+                if (player.currentBreak > player.highBreak) {
+                    player.highBreak = player.currentBreak;
+                }
+                state.isFreeBall = false;
+                render();
+                return;
+            }
+
+            // Standard Ball Scoring Logic
+            if (state.remainingReds > 0) {
+                // Red Phase: Alternates Red -> Color -> Red
+                if (state.targetPhase === 'red' && ballName === 'Red') {
+                    player.score += points;
+                    player.currentBreak += points;
+                    state.remainingReds -= 1;
+
+                    if (state.remainingReds > 0) {
+                        state.targetPhase = 'color';
+                    } else {
+                        // All 15 reds potted -> Transition directly to Yellow color clearance
+                        state.targetPhase = COLOR_SEQUENCE[0];
+                        state.colorSequenceIndex = 0;
+                    }
+                } else if (state.targetPhase === 'color' && ballName !== 'Red') {
+                    player.score += points;
+                    player.currentBreak += points;
+                    state.targetPhase = 'red';
+                }
+            } else {
+                // Sequential Color Phase (Yellow -> Green -> Brown -> Blue -> Pink -> Black)
+                const currentTargetColor = COLOR_SEQUENCE[state.colorSequenceIndex];
+
+                if (ballName === currentTargetColor) {
+                    player.score += points;
+                    player.currentBreak += points;
+
+                    if (ballName === 'Black' && state.colorSequenceIndex === COLOR_SEQUENCE.length - 1) {
+                        if (player.currentBreak > player.highBreak) {
+                            player.highBreak = player.currentBreak;
+                        }
+                        triggerAutoFrameFinish();
+                        return;
+                    }
+
+                    if (state.colorSequenceIndex < COLOR_SEQUENCE.length - 1) {
+                        state.colorSequenceIndex += 1;
+                        state.targetPhase = COLOR_SEQUENCE[state.colorSequenceIndex];
+                    }
+                }
+            }
+
+            if (player.currentBreak > player.highBreak) {
+                player.highBreak = player.currentBreak;
+            }
+
+            render();
+        }
+
+        function triggerAutoFrameFinish() {
+            let winnerIndex = 0;
+            let maxScore = state.players[0].score;
+            let isTie = false;
+
+            for (let i = 1; i < state.players.length; i++) {
+                if (state.players[i].score > maxScore) {
+                    maxScore = state.players[i].score;
+                    winnerIndex = i;
+                    isTie = false;
+                } else if (state.players[i].score === maxScore && maxScore > 0) {
+                    isTie = true;
+                }
+            }
+
+            if (!isTie) {
+                state.players[winnerIndex].frames += 1;
+            }
+
+            const modal = document.getElementById('frame-finished-modal');
+            const titleEl = document.getElementById('frame-winner-title');
+            const breakdownEl = document.getElementById('frame-scores-breakdown');
+
+            titleEl.innerText = isTie ? "Frame Tied!" : `${state.players[winnerIndex].name} Wins Frame!`;
+
+            breakdownEl.innerHTML = state.players.map((p, idx) => `
+                <div class="flex items-center justify-between text-xs py-1 ${idx === winnerIndex && !isTie ? 'text-amber-300 font-extrabold' : 'text-slate-300'}">
+                    <span>${p.name} ${idx === winnerIndex && !isTie ? '🏆' : ''}</span>
+                    <span class="font-black text-sm">${p.score} pts</span>
+                </div>
+            `).join('');
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            render();
+        }
+
+        function startNewFrameFromModal() {
+            document.getElementById('frame-finished-modal').classList.add('hidden');
+            document.getElementById('frame-finished-modal').classList.remove('flex');
+            
+            state.remainingReds = 15;
+            state.targetPhase = 'red';
+            state.colorSequenceIndex = 0;
+            state.isFreeBall = false;
+            state.players.forEach(p => {
+                p.score = 0;
+                p.currentBreak = 0;
+            });
+            render();
+        }
+
+        function adjustReds(delta) {
+            const newCount = state.remainingReds + delta;
+            if (newCount >= 0 && newCount <= 15) {
+                pushHistory();
+                state.remainingReds = newCount;
+                if (state.remainingReds > 0) {
+                    state.targetPhase = 'red';
+                    state.colorSequenceIndex = 0;
+                } else {
+                    state.targetPhase = COLOR_SEQUENCE[state.colorSequenceIndex];
+                }
+                render();
+            }
+        }
+
+        function nextTurn() {
+            if (state.players.length === 0) return;
+            pushHistory();
+            state.players[state.activePlayer].currentBreak = 0;
+            state.isFreeBall = false;
+            state.activePlayer = (state.activePlayer + 1) % state.players.length;
+
+            if (state.remainingReds > 0 && state.targetPhase === 'color') {
+                state.targetPhase = 'red';
+            }
+
+            render();
+        }
+
+        function setActivePlayer(index) {
+            if (state.activePlayer === index) return;
+            pushHistory();
+            state.players[state.activePlayer].currentBreak = 0;
+            state.isFreeBall = false;
+            state.activePlayer = index;
+
+            if (state.remainingReds > 0 && state.targetPhase === 'color') {
+                state.targetPhase = 'red';
+            }
+
+            render();
+        }
+
+        // Foul Handling
+        function openFoulModal() {
+            updateFoulModeUI();
+            document.getElementById('foul-modal').classList.remove('hidden');
+            document.getElementById('foul-modal').classList.add('flex');
+        }
+
+        function closeFoulModal() {
+            document.getElementById('foul-modal').classList.add('hidden');
+            document.getElementById('foul-modal').classList.remove('flex');
+        }
+
+        function setFoulMode(mode) {
+            state.foulMode = mode;
+            updateFoulModeUI();
+        }
+
+        function updateFoulModeUI() {
+            const addBtn = document.getElementById('foul-mode-add');
+            const deductBtn = document.getElementById('foul-mode-deduct');
+            
+            if (state.foulMode === 'add') {
+                addBtn.className = "py-2 px-2 rounded-lg border font-semibold text-center transition bg-emerald-600 border-emerald-500 text-white";
+                deductBtn.className = "py-2 px-2 rounded-lg border font-semibold text-center transition bg-slate-800 border-slate-700 text-slate-400";
+            } else {
+                addBtn.className = "py-2 px-2 rounded-lg border font-semibold text-center transition bg-slate-800 border-slate-700 text-slate-400";
+                deductBtn.className = "py-2 px-2 rounded-lg border font-semibold text-center transition bg-rose-600 border-rose-500 text-white";
+            }
+        }
+
+        function applyFoul(foulPoints) {
+            if (state.players.length === 0) return;
+            pushHistory();
+            const foulerIndex = state.activePlayer;
+            
+            if (state.foulMode === 'add') {
+                for (let i = 0; i < state.players.length; i++) {
+                    if (i !== foulerIndex) {
+                        state.players[i].score += foulPoints;
+                    }
+                }
+            } else {
+                state.players[foulerIndex].score = Math.max(0, state.players[foulerIndex].score - foulPoints);
+            }
+
+            state.players[foulerIndex].currentBreak = 0;
+            state.isFreeBall = false;
+            state.activePlayer = (state.activePlayer + 1) % state.players.length;
+
+            if (state.remainingReds > 0) {
+                state.targetPhase = 'red';
+            }
+            
+            closeFoulModal();
+            render();
+        }
+
+        // Name Modal Controls
+        function openNameModal(index, event) {
+            if (event) event.stopPropagation();
+            editingPlayerIndex = index;
+            document.getElementById('player-name-input').value = state.players[index].name;
+            document.getElementById('name-modal').classList.remove('hidden');
+            document.getElementById('name-modal').classList.add('flex');
+            setTimeout(() => document.getElementById('player-name-input').focus(), 100);
+        }
+
+        function closeNameModal() {
+            document.getElementById('name-modal').classList.add('hidden');
+            document.getElementById('name-modal').classList.remove('flex');
+            editingPlayerIndex = null;
+        }
+
+        function savePlayerName() {
+            const input = document.getElementById('player-name-input').value.trim();
+            if (input && editingPlayerIndex !== null) {
+                pushHistory();
+                state.players[editingPlayerIndex].name = input;
+                render();
+            }
+            closeNameModal();
+        }
+
+        // Reset & Frame Controls
+        function promptReRack() {
+            showConfirmModal(
+                '<i class="fa-solid fa-arrows-rotate text-sky-400"></i>',
+                "Re-rack Frame?",
+                "Resets reds to 15, current frame scores to 0, and restores starting Red phase.",
+                reRackFrame
+            );
+        }
+
+        function reRackFrame() {
+            pushHistory();
+            state.remainingReds = 15;
+            state.targetPhase = 'red';
+            state.colorSequenceIndex = 0;
+            state.isFreeBall = false;
+            state.players.forEach(p => {
+                p.score = 0;
+                p.currentBreak = 0;
+            });
+            closeConfirmModal();
+            render();
+        }
+
+        function promptEndFrame() {
+            if (state.players.length === 0) return;
+
+            let winnerIndex = 0;
+            let maxScore = state.players[0].score;
+            let isTie = false;
+
+            for (let i = 1; i < state.players.length; i++) {
+                if (state.players[i].score > maxScore) {
+                    maxScore = state.players[i].score;
+                    winnerIndex = i;
+                    isTie = false;
+                } else if (state.players[i].score === maxScore && maxScore > 0) {
+                    isTie = true;
+                }
+            }
+
+            const title = "End Current Frame?";
+            const desc = isTie 
+                ? "Scores are tied. Conclude frame anyway?" 
+                : `${state.players[winnerIndex].name} is leading with ${maxScore} pts. Award frame?`;
+
+            showConfirmModal(
+                '<i class="fa-solid fa-trophy text-amber-400"></i>',
+                title,
+                desc,
+                () => {
+                    triggerAutoFrameFinish();
+                    closeConfirmModal();
+                }
+            );
+        }
+
+        function promptResetGame() {
+            showConfirmModal(
+                '<i class="fa-solid fa-power-off text-rose-400"></i>',
+                "Reset Entire Game?",
+                "Resets all scores, frame wins, high breaks, and sets reds to 15.",
+                resetEntireGame
+            );
+        }
+
+        function resetEntireGame() {
+            pushHistory();
+            state.remainingReds = 15;
+            state.targetPhase = 'red';
+            state.colorSequenceIndex = 0;
+            state.isFreeBall = false;
+            state.activePlayer = 0;
+            state.players.forEach(p => {
+                p.score = 0;
+                p.frames = 0;
+                p.currentBreak = 0;
+                p.highBreak = 0;
+            });
+            closeConfirmModal();
+            render();
+        }
+
+        function showConfirmModal(iconHtml, title, desc, callback) {
+            document.getElementById('confirm-icon').innerHTML = iconHtml;
+            document.getElementById('confirm-title').innerText = title;
+            document.getElementById('confirm-desc').innerText = desc;
+            confirmCallback = callback;
+            
+            const btn = document.getElementById('confirm-action-btn');
+            btn.onclick = () => {
+                if (confirmCallback) confirmCallback();
+            };
+
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeConfirmModal() {
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            confirmCallback = null;
+        }
+
+        // Render UI Function
+        function render() {
+            document.getElementById('player-count-num').innerText = state.players.length;
+            document.getElementById('reds-count-display').innerText = state.remainingReds;
+
+            // Render Target Guidance & Phase Badge
+            const badgeEl = document.getElementById('phase-badge');
+            const guidanceEl = document.getElementById('target-guidance');
+
+            if (state.remainingReds > 0) {
+                badgeEl.innerText = "RED PHASE";
+                badgeEl.className = "px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-rose-900/80 text-rose-200 border border-rose-700/60";
+                
+                if (state.targetPhase === 'red') {
+                    guidanceEl.innerText = "Pot Red Ball";
+                } else {
+                    guidanceEl.innerText = "Pot Any Color";
+                }
+            } else {
+                badgeEl.innerText = "COLORS PHASE";
+                badgeEl.className = "px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-amber-900/80 text-amber-200 border border-amber-700/60";
+                guidanceEl.innerText = `Pot ${COLOR_SEQUENCE[state.colorSequenceIndex]}`;
+            }
+
+            // Render Players Cards
+            const container = document.getElementById('players-container');
+            container.innerHTML = state.players.map((p, idx) => {
+                const isActive = idx === state.activePlayer;
+                return `
+                    <div onclick="setActivePlayer(${idx})" class="p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${isActive ? 'active-player-card' : 'inactive-player-card'}">
+                        <div class="flex items-center space-x-2.5">
+                            <div class="w-3 h-3 rounded-full ${isActive ? 'bg-emerald-400 shadow-[0_0_8px_#22c55e]' : 'bg-slate-600'}"></div>
+                            <div>
+                                <div class="flex items-center space-x-1.5">
+                                    <span class="font-extrabold text-sm sm:text-base text-white tracking-wide">${p.name}</span>
+                                    <button onclick="openNameModal(${idx}, event)" class="text-slate-400 hover:text-white p-1 text-xs">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                </div>
+                                <div class="flex items-center space-x-3 text-[11px] text-slate-300">
+                                    <span>Frames: <strong class="text-amber-400 font-extrabold">${p.frames}</strong></span>
+                                    <span>High Break: <strong class="text-emerald-300 font-extrabold">${p.highBreak}</strong></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center space-x-3">
+                            <div class="text-right">
+                                <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Break</div>
+                                <div class="text-base sm:text-lg font-black text-amber-300 leading-none">${p.currentBreak}</div>
+                            </div>
+                            <div class="text-right bg-slate-900/60 px-2.5 py-1.5 rounded-xl border border-slate-700/50">
+                                <div class="text-[10px] uppercase tracking-wider text-emerald-400 font-extrabold">Score</div>
+                                <div class="text-xl sm:text-2xl font-black text-white leading-none">${p.score}</div>
+                            </div>
+                            ${state.players.length > 1 ? `
+                                <button onclick="removePlayer(${idx}, event)" class="text-rose-400/70 hover:text-rose-400 p-1 text-xs" title="Remove Player">
+                                    <i class="fa-solid fa-xmark text-base"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Highlight and enable/disable balls based on current phase
+            const ballIds = {
+                'Red': 'ball-red',
+                'Yellow': 'ball-yellow',
+                'Green': 'ball-green',
+                'Brown': 'ball-brown',
+                'Blue': 'ball-blue',
+                'Pink': 'ball-pink',
+                'Black': 'ball-black'
+            };
+
+            Object.keys(ballIds).forEach(bName => {
+                const btn = document.getElementById(ballIds[bName]);
+                if (!btn) return;
+
+                btn.classList.remove('disabled-ball', 'target-ball');
+
+                if (state.isFreeBall) {
+                    // All balls enabled during free ball
+                } else if (state.remainingReds > 0) {
+                    if (state.targetPhase === 'red') {
+                        if (bName !== 'Red') btn.classList.add('disabled-ball');
+                        else btn.classList.add('target-ball');
+                    } else if (state.targetPhase === 'color') {
+                        if (bName === 'Red') btn.classList.add('disabled-ball');
+                    }
+                } else {
+                    const currentTarget = COLOR_SEQUENCE[state.colorSequenceIndex];
+                    if (bName !== currentTarget) {
+                        btn.classList.add('disabled-ball');
+                    } else {
+                        btn.classList.add('target-ball');
+                    }
+                }
+            });
+
+            // Update Free Ball Button State
+            const fbBtn = document.getElementById('freeball-btn');
+            if (fbBtn) {
+                if (state.isFreeBall) {
+                    fbBtn.className = "bg-amber-500 text-slate-950 border border-amber-300 px-2 py-2 rounded-xl font-bold text-xs flex items-center space-x-1 shadow transition animate-pulse";
+                } else {
+                    fbBtn.className = "bg-indigo-900/80 hover:bg-indigo-800 active:scale-95 text-indigo-200 border border-indigo-700/60 px-2 py-2 rounded-xl font-bold text-xs flex items-center space-x-1 shadow transition";
+                }
+            }
+
+            updateUndoButton();
+        }
+
+        // Initial setup
+        render();
+    </script>
+</body>
+</html>
